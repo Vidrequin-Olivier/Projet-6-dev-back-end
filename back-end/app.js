@@ -1,36 +1,27 @@
 const express = require('express');
 const app = express();
-const PORT = process.env.PORT || 5000;
+const mongoose = require('mongoose');
+const bookRoutes = require('./routes/book');
+const userRoutes = require('./routes/user');
+const path = require('path');
+
+mongoose.connect('mongodb+srv://exercice:d2YmkDSc9pF.D@cluster0.dihitit.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0',
+  { useNewUrlParser: true,
+    useUnifiedTopology: true })
+  .then(() => console.log('Connexion à MongoDB réussie !'))
+  .catch(() => console.log('Connexion à MongoDB échouée !'));
+
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content, Accept, Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  next();
+});
 
 app.use(express.json());
 
-app.get('/', (req, res) => {
-  res.send('Page d\'accueil');
-});
-
-app.post('/sign-in', (req, res) => {
-  const { username, password } = req.body;
-  res.send('Authentification réussie');
-});
-
-app.get('/book/:id', (req, res) => {
-  const { id } = req.params;
-  res.send(`Détails du livre avec ID: ${id}`);
-});
-
-app.post('/add-book', (req, res) => {
-  const newBook = req.body;
-  res.send('Nouveau livre ajouté');
-});
-
-app.put('/update-book/:id', (req, res) => {
-  const { id } = req.params;
-  const updatedBook = req.body;
-  res.send(`Livre avec ID: ${id} mis à jour`);
-});
-
-app.listen(PORT, () => {
-  console.log(`Serveur en cours d'exécution sur le port ${PORT}`);
-});
+app.use('/api/books', bookRoutes);
+app.use('/api/auth', userRoutes);
+app.use('/images', express.static(path.join(__dirname, 'images')));
 
 module.exports = app;
