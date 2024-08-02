@@ -1,18 +1,38 @@
 const Book = require('../models/Book');
 const fs = require('fs');
+const sharp = require('sharp');
+const path = require('path');
 
 exports.createBook = (req, res, next) => {
   const bookObject = JSON.parse(req.body.book);
-  console.log(bookObject);
-  const book = new Book({
-    ...bookObject,
-    userId: req.auth.userId,
-    imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
-  });
-  console.log("affiche le book:", book);
-  book.save()
-    .then(() => res.status(201).json({ message: 'Nouveau livre enregistré !'}))
-    .catch(error => res.status(400).json({ error }));
+  const filename = req.file.filename;
+  const filePath = path.join(__dirname, '../images', filename);
+  const outputFilePath = path.join(__dirname, '../images', 'resized_' + filename);
+
+  sharp(filePath)
+    .rotate()
+    .resize(null, 1000)
+    .jpeg({ mozjpeg: true })
+    .toFile(outputFilePath)
+    .then(() => {
+      const book = new Book({
+        ...bookObject,
+        userId: req.auth.userId,
+        imageUrl: `${req.protocol}://${req.get('host')}/images/resized_${filename}`
+      });
+
+      book.save()
+        .then(() => {
+          fs.unlink(filePath, (err) => {
+            if (err) {
+              console.error('Erreur lors de la suppression de l\'image non redimensionnée:', err);
+            }
+          });
+          res.status(201).json({ message: 'Nouveau livre enregistré !' });
+        })
+        .catch(error => res.status(400).json({ error }));
+    })
+    .catch(error => res.status(500).json({ error }));
 };
 
 exports.getOneBook = (req, res, next) => {
@@ -27,30 +47,81 @@ exports.getAllBooks = (req, res, next) => {
     .catch(error => res.status(400).json({ error }));
 };
 
+// exports.modifyBook = (req, res, next) => {
+//   const bookObject = req.file ? {
+//     ...JSON.parse(req.body.book),
+//     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
+//   } : { ...req.body };
+//   Book.findOne({_id: req.params.id})
+//     .then((book) => {
+//       if (book.userId != req.auth.userId) {
+//         res.status(401).json({ error });
+//       } else {
+//         if (req.file) {
+//           const oldFilename = book.imageUrl.split('/images/')[1];
+//           fs.unlink(`images/${oldFilename}`, (err) => {
+//             if (err) console.error(err);
+//           });
+//         }
+//         Book.updateOne({ _id: req.params.id}, { ...bookObject, _id: req.params.id })
+//           .then(() => res.status(200).json({ book }))
+//           .catch(error => res.status(401).json({ error }));
+//       }
+//     })
+//     .catch(error => res.status(400).json({ error }));
+// };
+
 exports.modifyBook = (req, res, next) => {
   const bookObject = req.file ? {
     ...JSON.parse(req.body.book),
     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
   } : { ...req.body };
-  Book.findOne({_id: req.params.id})
+
+  Book.findOne({ _id: req.params.id })
     .then((book) => {
       if (book.userId != req.auth.userId) {
-        res.status(401).json({ error });
-      } else {
-        if (req.file) {
-          const oldFilename = book.imageUrl.split('/images/')[1];
-          fs.unlink(`images/${oldFilename}`, (err) => {
-            if (err) console.error(err);
+        return res.status(401).json({ error: 'Non autorisé' });
+      }
+
+      if (req.file) {
+
+        // const oldFilename = book.imageUrl.split('/images/')[1];
+        // const filePath = path.join(__dirname, '../images', req.file.filename);
+        // const now = new Date();
+        // const timestamp = now.toISOString().replace(/[-T:\.Z]/g, '');
+        // const outputFilePath = path.join(__dirname, '../images', `${timestamp}.jpg`);
+
+        const oldFilename = book.imageUrl.split('/images/')[1];
+        const filePath = path.join(__dirname, '../images', req.file.filename);
+        const outputFilePath = path.join(__dirname, '../images', "2" + req.file.filename);
+
+        sharp(filePath)
+          .rotate()
+          .resize(null, 1000)
+          .jpeg({ mozjpeg: true })
+          .toFile(outputFilePath)
+          .then(() => {
+            fs.unlink(`images/${oldFilename}`, (err) => {
+              if (err) {
+                console.error('Erreur lors de la suppression de l\'ancienne image:', err);
+              }
+            });
+
+            Book.updateOne({ _id: req.params.id }, { ...bookObject, _id: req.params.id })
+              .then(() => res.status(200).json({ message: 'Livre modifié !' }))
+              .catch(error => res.status(401).json({ error }));
+          })
+          .catch(error => {
+            console.error('Erreur lors du traitement de l\'image:', error);
+            res.status(500).json({ error: 'Erreur lors du traitement de l\'image', details: error.message });
           });
-        }
-        Book.updateOne({ _id: req.params.id}, { ...bookObject, _id: req.params.id })
-          .then(() => res.status(200).json({ message: 'Livre modifié' }))
+      } else {
+        Book.updateOne({ _id: req.params.id }, { ...bookObject, _id: req.params.id })
+          .then(() => res.status(200).json({ message: 'Livre modifié !' }))
           .catch(error => res.status(401).json({ error }));
       }
     })
-    .catch((error) => {
-      res.status(400).json({ error });
-    });
+    .catch(error => res.status(400).json({ error }));
 };
 
 exports.bestRating = (req, res, next) => {
@@ -92,16 +163,18 @@ exports.rateBook = (req, res, next) => {
 
       book.ratings.push({ userId, grade: rating });
       const averageRating = book.ratings.reduce((sum, el) => sum + el.grade, 0) / book.ratings.length;
-      book.averageRating = averageRating;
-      console.log("état du book avant book.save: ", book);
-      book.save()
-        .then(updatedBook => { res.status(200).json({ updatedBook, id: bookId })})
+      const updateData = {
+        id: bookId,
+        ratings: book.ratings,
+        averageRating: averageRating,
+      };
+
+      Book.updateOne({ _id: bookId }, updateData)
+        .then(() => {
+          console.log('Updated Book:', updateData);
+          res.status(200).json({ updatedBook: updateData });
+        })
         .catch(error => res.status(500).json({ error }));
     })
     .catch(error => res.status(500).json({ error }));
 };
-
-
-
-
-

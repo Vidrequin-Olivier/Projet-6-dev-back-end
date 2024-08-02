@@ -133,3 +133,6 @@ dist
 .informationsDeConnection.txt
 
 imagesPourTests/
+
+# variables d'environnement
+.env
