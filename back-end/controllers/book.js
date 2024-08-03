@@ -5,9 +5,11 @@ const path = require('path');
 
 exports.createBook = (req, res, next) => {
   const bookObject = JSON.parse(req.body.book);
-  const filename = req.file.filename;
-  const filePath = path.join(__dirname, '../images', filename);
-  const outputFilePath = path.join(__dirname, '../images', 'resized_' + filename);
+  const filePath = path.join(__dirname, '../images', req.file.filename);
+  const now = new Date();
+  const timestamp = now.toISOString().replace(/[-T:\.Z]/g, '');
+  const filename = `${timestamp}.jpg`;
+  const outputFilePath = path.join(__dirname, '../images', filename);
 
   sharp(filePath)
     .rotate()
@@ -18,9 +20,9 @@ exports.createBook = (req, res, next) => {
       const book = new Book({
         ...bookObject,
         userId: req.auth.userId,
-        imageUrl: `${req.protocol}://${req.get('host')}/images/resized_${filename}`
+        imageUrl: `${req.protocol}://${req.get('host')}/images/${filename}`
       });
-
+      
       book.save()
         .then(() => {
           fs.unlink(filePath, (err) => {
@@ -47,30 +49,6 @@ exports.getAllBooks = (req, res, next) => {
     .catch(error => res.status(400).json({ error }));
 };
 
-// exports.modifyBook = (req, res, next) => {
-//   const bookObject = req.file ? {
-//     ...JSON.parse(req.body.book),
-//     imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}`
-//   } : { ...req.body };
-//   Book.findOne({_id: req.params.id})
-//     .then((book) => {
-//       if (book.userId != req.auth.userId) {
-//         res.status(401).json({ error });
-//       } else {
-//         if (req.file) {
-//           const oldFilename = book.imageUrl.split('/images/')[1];
-//           fs.unlink(`images/${oldFilename}`, (err) => {
-//             if (err) console.error(err);
-//           });
-//         }
-//         Book.updateOne({ _id: req.params.id}, { ...bookObject, _id: req.params.id })
-//           .then(() => res.status(200).json({ book }))
-//           .catch(error => res.status(401).json({ error }));
-//       }
-//     })
-//     .catch(error => res.status(400).json({ error }));
-// };
-
 exports.modifyBook = (req, res, next) => {
   const bookObject = req.file ? {
     ...JSON.parse(req.body.book),
@@ -80,20 +58,15 @@ exports.modifyBook = (req, res, next) => {
   Book.findOne({ _id: req.params.id })
     .then((book) => {
       if (book.userId != req.auth.userId) {
-        return res.status(401).json({ error: 'Non autorisé' });
+        return res.status(401).json({ error });
       }
-
       if (req.file) {
-
-        // const oldFilename = book.imageUrl.split('/images/')[1];
-        // const filePath = path.join(__dirname, '../images', req.file.filename);
-        // const now = new Date();
-        // const timestamp = now.toISOString().replace(/[-T:\.Z]/g, '');
-        // const outputFilePath = path.join(__dirname, '../images', `${timestamp}.jpg`);
-
         const oldFilename = book.imageUrl.split('/images/')[1];
         const filePath = path.join(__dirname, '../images', req.file.filename);
-        const outputFilePath = path.join(__dirname, '../images', "2" + req.file.filename);
+        const now = new Date();
+        const timestamp = now.toISOString().replace(/[-T:\.Z]/g, '');
+        const outputFilename = `${timestamp}.jpg`;
+        const outputFilePath = path.join(__dirname, '../images', outputFilename);
 
         sharp(filePath)
           .rotate()
@@ -106,15 +79,23 @@ exports.modifyBook = (req, res, next) => {
                 console.error('Erreur lors de la suppression de l\'ancienne image:', err);
               }
             });
+            fs.unlink(filePath, (err) => {
+              if (err) {
+                console.error('Erreur lors de la suppression du fichier temporaire:', err);
+              }
+            });
 
-            Book.updateOne({ _id: req.params.id }, { ...bookObject, _id: req.params.id })
+            const updatedBook = {
+              ...bookObject,
+              imageUrl: `${req.protocol}://${req.get('host')}/images/${outputFilename}`,
+              _id: req.params.id
+            };
+
+            Book.updateOne({ _id: req.params.id }, updatedBook)
               .then(() => res.status(200).json({ message: 'Livre modifié !' }))
               .catch(error => res.status(401).json({ error }));
           })
-          .catch(error => {
-            console.error('Erreur lors du traitement de l\'image:', error);
-            res.status(500).json({ error: 'Erreur lors du traitement de l\'image', details: error.message });
-          });
+          .catch(error => res.status(500).json({ error }));
       } else {
         Book.updateOne({ _id: req.params.id }, { ...bookObject, _id: req.params.id })
           .then(() => res.status(200).json({ message: 'Livre modifié !' }))
