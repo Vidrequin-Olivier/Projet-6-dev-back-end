@@ -27,7 +27,7 @@ exports.createBook = (req, res, next) => {
         .then(() => {
           fs.unlink(filePath, (err) => {
             if (err) {
-              console.error('Erreur lors de la suppression de l\'image non redimensionnée:', err);
+              console.error(err);
             }
           });
           res.status(201).json({ message: 'Nouveau livre enregistré !' });
@@ -76,12 +76,12 @@ exports.modifyBook = (req, res, next) => {
           .then(() => {
             fs.unlink(`images/${oldFilename}`, (err) => {
               if (err) {
-                console.error('Erreur lors de la suppression de l\'ancienne image:', err);
+                console.error(err);
               }
             });
             fs.unlink(filePath, (err) => {
               if (err) {
-                console.error('Erreur lors de la suppression du fichier temporaire:', err);
+                console.error(err);
               }
             });
 
@@ -134,28 +134,22 @@ exports.rateBook = (req, res, next) => {
   const { userId, rating } = req.body;
   const bookId = req.params.id;
 
-  if (!userId || rating === undefined) { return res.status(400).json({ error })}
-  if (rating < 0 || rating > 5) { return res.status(400).json({ error })}
+  if (!userId || rating === undefined) { return res.status(400).json({ error }) }
+  if (rating < 0 || rating > 5) { return res.status(400).json({ error }) }
 
   Book.findOne({ _id: bookId })
-    .then(book => {
-      if (!book) { return res.status(404).json({ error })}
-      if (book.ratings.find(el => el.userId === userId)) { return res.status(400).json({ error })}
+      .then(book => {
+          if (!book) { return res.status(404).json({ error }) }
+          if (book.ratings.find(el => el.userId === userId)) { return res.status(400).json({ error }) }
 
-      book.ratings.push({ userId, grade: rating });
-      const averageRating = book.ratings.reduce((sum, el) => sum + el.grade, 0) / book.ratings.length;
-      const updateData = {
-        id: bookId,
-        ratings: book.ratings,
-        averageRating: averageRating,
-      };
+          book.ratings.push({ userId, grade: rating });
+          book.averageRating = book.ratings.reduce((sum, el) => sum + el.grade, 0) / book.ratings.length;
 
-      Book.updateOne({ _id: bookId }, updateData)
-        .then(() => {
-          console.log('Updated Book:', updateData);
-          res.status(200).json({ updatedBook: updateData });
-        })
-        .catch(error => res.status(500).json({ error }));
-    })
-    .catch(error => res.status(500).json({ error }));
+          Book.updateOne({ _id: bookId }, { ratings: book.ratings, averageRating: book.averageRating })
+              .then(() => {
+                  res.status(200).json(book);
+              })
+              .catch(error => res.status(500).json({ error }));
+      })
+      .catch(error => res.status(500).json({ error }));
 };
