@@ -10,4 +10,5 @@ Pour utiliser ce code, il faudra instaler ces outils à la racine du projet avec
   
 Il faudra aussi créer un fichier .env à la racine du projet qui contiendra:
 MONGOOSE_CONNECT=mongodb+srv://exercice:d2YmkDSc9pF.D@cluster0.dihitit.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+
 JWT_SECRET="token_aleatoire"
