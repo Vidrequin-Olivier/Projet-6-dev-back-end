@@ -130,9 +130,12 @@ dist
 .pnp.*
 
 # personal login information
-.informationsDeConnection.txt
+informationsDeConnection.txt
 
 imagesPourTests/
 
 # variables d'environnement
 .env
+
+# fichier texte contenant le lien vers le repos GitHub pour soutenance du projet
+Vidrequin_Olivier_6_Développez le back-end d'un site de notation de livres_062024.txt
